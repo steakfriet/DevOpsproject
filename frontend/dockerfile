@@ -1,3 +1,4 @@
+# fix git message
 FROM nginx:alpine
 COPY . /usr/share/nginx/html
 EXPOSE 80
