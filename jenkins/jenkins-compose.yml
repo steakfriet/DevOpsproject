@@ -1,0 +1,27 @@
+services:
+  jenkins:
+    image: jenkins/jenkins:jdk17
+    container_name: jenkins
+    restart: always
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./ssh:/home/jenkins/.ssh
+    environment:
+      - JENKINS_OPTS="--httpPort=8080"
+    labels:
+      - "traefik.http.routers.jenkins.rule=Host(`jenkins.antond.xyz`)"
+      - "traefik.http.routers.jenkins.tls=true"
+      - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+    networks:
+      - network1
+
+volumes:
+  jenkins-data:
+    driver: local
+
+networks:
+  network1:
+    name: network1
+    external: true

@@ -1,26 +1,4 @@
-version: '3.3'
-
 services:
-  traefik:
-    image: traefik:v2.10
-    container_name: traefik
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./letsencrypt:/letsencrypt
-    networks:
-      - acme_network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.antond.xyz`)"
-      - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.entrypoints=websecure"
-      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
-
   frontend:
     build:
       context: ./frontend
@@ -28,7 +6,7 @@ services:
       - "80"
     restart: always
     networks:
-      - acme_network
+      - network1
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`antond.xyz`)"
@@ -51,7 +29,8 @@ services:
     depends_on:
       - mysql
     networks:
-      - acme_network
+      - network1
+      - network2
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`antond.xyz`) && PathPrefix(`/api`)"
@@ -72,13 +51,16 @@ services:
       - db_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      - acme_network
+      - network2
 
 volumes:
   db_data:
   letsencrypt:
 
 networks:
-  acme_network:
-    driver: bridge
-
+  network1:
+    name: network1
+    external: true
+  network2:
+    name: network2
+    external: false
