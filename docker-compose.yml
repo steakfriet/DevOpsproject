@@ -1,18 +1,46 @@
 version: '3.3'
 
 services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - acme_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.antond.xyz`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+
   frontend:
     build:
       context: ./frontend
     ports:
-      - "80:80"
+      - "80"
     restart: always
+    networks:
+      - acme_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`antond.xyz`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=myresolver"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
   backend:
     build:
       context: ./backend
     ports:
-      - "3000:3000"
+      - "3000"
     restart: always
     environment:
       - STORAGE=mysql
@@ -22,6 +50,14 @@ services:
       - MYSQL_DB=${MYSQL_DATABASE}
     depends_on:
       - mysql
+    networks:
+      - acme_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`antond.xyz`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=myresolver"
+      - "traefik.http.services.backend.loadbalancer.server.port=3000"
 
   mysql:
     image: mysql:8.0
@@ -40,7 +76,9 @@ services:
 
 volumes:
   db_data:
+  letsencrypt:
 
 networks:
   acme_network:
     driver: bridge
+
