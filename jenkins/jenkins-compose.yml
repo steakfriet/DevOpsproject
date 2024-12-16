@@ -10,6 +10,7 @@ services:
     environment:
       - JENKINS_OPTS="--httpPort=8080"
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.jenkins.rule=Host(`jenkins.antond.xyz`)"
       - "traefik.http.routers.jenkins.tls=true"
       - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
