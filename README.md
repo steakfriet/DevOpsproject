@@ -1,42 +1,181 @@
-# Projectopdracht
 
-Welkom bij het de repository voor de doorlopende opdracht van DevOps. 
+# **Applicatie met Docker Compose**
 
-## Situatie
 
-Je werkt voor ACME. Ze hebben onlangs een todo-applicatie ontwikkeld. 
-Je wordt gevraagd om een DevOps pipeline uit te werken. Hiervoor zal je op een remote Linux machine werken.
+## **1. Containers Online Zetten met Docker Compose**
 
-Er zijn twee onderdelen: Back-end en Front-end. Er is geen authenticatie.
+### **a. Installeer Docker en de Docker Compose Plugin**
 
-De back-end is een NodeJs applicatie die de API host. De back-end luistert op poort 3000. 
-De back-end draait standaard in-memory. Met andere woorden, de taken worden enkel opgeslagen in geheugen, niet op disk. 
-De back-end kan ook een connectie maken naar een mysql databank. Die stel je in met volgende environment variabelen:
+Zorg ervoor dat Docker en de Docker Compose plugin op je machine zijn geïnstalleerd.  
+Volg de officiële handleiding hier:  
+https://docs.docker.com/engine/install/
 
-* STORAGE=mysql
-* MYSQL_HOST=<hostname>
-* MYSQL_USER=<username>
-* MYSQL_PWD=$mysqlpwd 
-* MYSQL_DB=$mysqldb
+### **b. Start de Containers**
 
-De Front-end is een HTML5 statische applicatie en luistert op poort 80. 
-Via AJAX calls wordt de API aangeroepen. De front-end en de API moeten op dezelfde host draaien. 
-De API draait in een subfolder /api.
+1. Start alle containers:  
 
-## Architectuur
+Start de frontend, backend, database, Jenkins en Traefik met:
 
-![Architectuur](./architectuur.png)
+```bash
+docker compose up -d
+```
 
-## Opdracht:
+Voor specifieke services (bv. Jenkins):
 
-1. Connecteer naar je Debian Linux omgeving
-1. Clone deze repository
-1. Bouw een container voor de back-end. De back-end draait op NodeJS. Kies zelf een tag.
-1. Bouw een container voor de front-end. De front-end draait op Nginx. Je maakt gebruik van nginx. Je kan gebruik maken van de standaard configuratie.
-1. Maak een docker compose file aan die deze containers refereert. Expose je front-end op poort 80.
-1. Voeg Mysql toe aan je netwerk dmv een docker container. Je maakt gebruik van een mysql image. Voeg disk mappings toe zodat de state van je mysql container bewaard blijft.
-1. De repository bevat een bestand init.sql. Zorg dat dit wordt uitgevoerd bij de start van de Mysql container. 
-1. Configureer de API zodat die deze MySql databank gebruikt.
-1. Installeer Traefik als Reverse proxy op je omgeving.
-1. Configureer ssl certificaat aanvraag via LetsEncrypt
-1. Expose de todo applicatie op ```https://<studentnr>.devops-ap.be```
+```bash
+cd jenkins
+docker compose up -d
+```
+
+2. **Controleer de status van de containers**:
+
+```bash
+docker ps
+```
+
+## **2. Aanpassingen in de Compose Files voor Eigen Situatie**
+
+### **a. `docker-compose.yml` (frontend/backend/mysql)**
+
+- **Domeinnamen**:  
+    Pas de labels aan om jouw domein te gebruiken:
+
+```yaml
+- "traefik.http.routers.frontend.rule=Host(`jouwdomein`)"
+```
+
+- Enviroment variables:
+	maak een .env bestand en vul je eigen database-gegevens in:
+	
+```yaml
+MYSQL_HOST=mysql
+MYSQL_USER=user
+MYSQL_ROOT_PASSWORD=root_password
+MYSQL_DATABASE=database
+MYSQL_PASSWORD=password
+```
+
+### **b. `traefik-compose.yml` en `traefik.yml`**
+
+- **Domeinnamen**:  
+    Vervang de domeinnamen door jouw eigen domeinen.  
+    Labels in `traefik-compose.yml`:
+
+```yaml
+- "traefik.http.routers.traefik.rule=Host(`traefik.jouwdomein`)"
+```
+
+- **E-mail voor Let's Encrypt**:  
+	Pas je e-mailadres aan voor certificaten in `traefik.yml`:
+
+```yaml
+email: jouw-email@example.com
+```
+
+- **DNS Configuratie**:  
+	Zorg dat jouw domeinen verwijzen naar het IP-adres van je server via je DNS-provider.
+
+### **c. Jenkins Compose File**
+
+- Pas de domeinnaam voor Jenkins aan:
+
+```yaml
+- "traefik.http.routers.jenkins.rule=Host(`jenkins.jouwdomein`)"
+```
+
+# **Setup van Jenkins**
+
+### **a. Jenkins Starten en Toegang Krijgen**
+
+1. Open Jenkins in de browser via:
+
+```
+https://jenkins.jouwdomein
+```
+
+2. **Initial Admin Password**:  
+	Zoek het initiële wachtwoord in de Jenkins-container:
+
+```bash
+docker logs jenkins
+```
+
+3. Volg de installatie wizard om Jenkins te configureren.
+
+### **b. Credentials toevoegen aan jenkins**
+
+1. maak een ssh keypair aan:
+
+```bash
+ssh-keygen
+```
+
+2. Installeer java op je vm:
+
+```bash
+sudo apt install openjdk-17-jre
+```
+
+3. maak jenkins user aan op je vm:
+
+```bash
+useradd -m -s /bin/bash jenkins
+```
+
+4. Zet de public key van je eerder aangemaakte keypair in de authorized_kets van deze jenkins user.
+
+5. ga op jenkins naar manage jenkins -> Credentials -> global -> Add credential:
+
+- ssh username with private key
+- ID: kies je zelf
+- username: jenkins
+- private key van jenkins user
+
+6. Voeg ook alle enviroment variabales als secret text toe bij credentials.
+
+### **c. agent toevoegen aan Jenkins**
+
+1. ga op jenkins naar manage jenkins -> Nodes -> New node:
+
+- permanent yes
+- 1 executor
+- remote root is `/home/jenkins`
+- labels zijn je domeinnamen met spaties ertussen
+- launch method –> SSH
+- Host: domijnnaam of IP van je server
+- Credentials: de credentials die je eerder maakte
+- Host key verification strategy: none
+
+### **d. Pipeline Script Configureren**
+
+1. Ga naar **Jenkins → New Item** en maak een nieuw Pipeline project aan.
+
+3. Voeg het volgende **Pipeline script** toe:
+
+```groovy
+pipeline {
+    agent { label 'jouw domein' }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: 'gekozen id van credentials', branch: 'main', url: 'jouw repo'
+            }
+        }
+
+        stage('Build and deploy') {
+            environment{
+                MYSQL_HOST = credentials('mysql_host')
+                MYSQL_USER = credentials('mysql_user')
+                MYSQL_ROOT_PASSWORD = credentials('mysql_root_password')
+                MYSQL_DATABASE = credentials('mysql_database')
+                MYSQL_PASSWORD = credentials('mysql_password')
+            }
+            steps{
+                sh "docker compose up --build -d"
+            }
+        }
+    }
+}
+```
+
