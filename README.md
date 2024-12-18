@@ -1,6 +1,7 @@
 
 # **Applicatie met Docker Compose**
 
+![archi](architectuur.png)
 
 ## **1. Containers Online Zetten met Docker Compose**
 
